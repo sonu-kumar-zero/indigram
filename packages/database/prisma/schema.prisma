@@ -24,6 +24,11 @@ enum MediaType {
   VIDEO
 }
 
+enum PostVisibility {
+  PUBLIC
+  PRIVATE
+}
+
 enum MediaVariantKind {
   ORIGINAL
   WEB
@@ -58,6 +63,8 @@ model Post {
   id             String     @id @default(cuid())
   authorId       String
   caption        String?    @db.VarChar(2200)
+  visibility     PostVisibility @default(PUBLIC)
+  likesVisible   Boolean    @default(true)
   status         PostStatus @default(AWAITING_UPLOAD)
   mediaType      MediaType
   sourceKey      String
@@ -69,14 +76,30 @@ model Post {
   publishedAt    DateTime?
   author         User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
   variants       MediaVariant[]
+  assets         PostAsset[]
 
   @@index([authorId, createdAt])
   @@index([status, createdAt])
 }
 
+model PostAsset {
+  id             String          @id @default(cuid())
+  postId         String
+  position       Int
+  sourceKey      String
+  sourceMimeType String
+  sourceSize     Int
+  post           Post            @relation(fields: [postId], references: [id], onDelete: Cascade)
+  variants       MediaVariant[]
+
+  @@unique([postId, position])
+  @@index([postId])
+}
+
 model MediaVariant {
   id         String           @id @default(cuid())
   postId     String
+  assetId    String?
   kind       MediaVariantKind
   objectKey  String
   mimeType   String
@@ -86,8 +109,9 @@ model MediaVariant {
   durationMs Int?
   createdAt  DateTime         @default(now())
   post        Post             @relation(fields: [postId], references: [id], onDelete: Cascade)
+  asset       PostAsset?       @relation(fields: [assetId], references: [id], onDelete: Cascade)
 
-  @@unique([postId, kind])
+  @@unique([assetId, kind])
   @@index([postId])
 }
 

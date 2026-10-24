@@ -15,6 +15,9 @@ function username(req: Request) {
 }
 
 export const followController = {
+  async latestUsers(req: Request, res: Response) {
+    res.json({ data: await followService.latestUsers(userId(req)) });
+  },
   async follow(req: Request, res: Response) {
     res.status(201).json({ data: await followService.follow(userId(req), username(req)) });
   },

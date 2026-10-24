@@ -2,6 +2,8 @@
 
 React + TypeScript client for the Indigram API.
 
+The UI is organized by feature under `src/components`: authentication, home/upload, profile, layout, and shared UI feedback. API request modules live under `src/api`, shared response contracts live under `src/types`, and styling uses Tailwind CSS v4 through the Vite plugin.
+
 ## Development
 
 ```bash

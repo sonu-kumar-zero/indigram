@@ -5,12 +5,17 @@ import { downloadUrl, uploadUrl } from "../../shared/media-storage.js";
 import { postRepository } from "./post.repository.js";
 
 export const postService = {
-  async create(authorId: string, input: { mediaType: "IMAGE" | "VIDEO"; mimeType: string; size: number; caption?: string }) {
+  async create(authorId: string, input: { mediaType: "IMAGE" | "VIDEO"; mimeType?: string; size?: number; images?: Array<{ mimeType: string; size: number }>; caption?: string; visibility?: "PUBLIC" | "PRIVATE"; likesVisible?: boolean }) {
     const postId = randomUUID();
-    const extension = input.mimeType.split("/")[1]?.split("+")[0] ?? "bin";
-    const sourceKey = `originals/${authorId}/${postId}/source.${extension}`;
-    const post = await postRepository.create({ authorId, mediaType: input.mediaType, sourceKey, sourceMimeType: input.mimeType, sourceSize: input.size, ...(input.caption ? { caption: input.caption } : {}) });
-    return { postId: post.id, status: post.status, uploadUrl: await uploadUrl(sourceKey, input.mimeType), uploadMethod: "PUT", uploadHeaders: { "content-type": input.mimeType }, expiresIn: 900 };
+    const images = input.images ?? [{ mimeType: input.mimeType!, size: input.size! }];
+    const uploads = await Promise.all(images.map(async (image, position) => {
+      const extension = image.mimeType.split("/")[1]?.split("+")[0] ?? "bin";
+      const sourceKey = `originals/${authorId}/${postId}/${position}.${extension}`;
+      return { position, sourceKey, sourceMimeType: image.mimeType, sourceSize: image.size, uploadUrl: await uploadUrl(sourceKey, image.mimeType), uploadMethod: "PUT", uploadHeaders: { "content-type": image.mimeType }, expiresIn: 900 };
+    }));
+    const first = uploads[0]!;
+    const post = await postRepository.create({ authorId, mediaType: input.mediaType, sourceKey: first.sourceKey, sourceMimeType: first.sourceMimeType, sourceSize: first.sourceSize, visibility: input.visibility, likesVisible: input.likesVisible, assets: uploads.map(({ position, sourceKey, sourceMimeType, sourceSize }) => ({ position, sourceKey, sourceMimeType, sourceSize })), ...(input.caption ? { caption: input.caption } : {}) });
+    return { postId: post.id, status: post.status, uploads };
   },
 
   async complete(authorId: string, postId: string) {
@@ -40,12 +45,16 @@ export const postService = {
   }
 };
 
-async function withMediaUrls<T extends { variants: Array<{ objectKey: string; kind: string }> }>(post: T) {
+async function withMediaUrls<T extends { variants: Array<{ objectKey: string; kind: string }>; assets: Array<{ variants: Array<{ objectKey: string; kind: string }> }> }>(post: T) {
   return {
     ...post,
     variants: await Promise.all(post.variants.map(async (variant) => ({
       ...variant,
       url: await downloadUrl(variant.objectKey)
+    }))),
+    assets: await Promise.all(post.assets.map(async (asset) => ({
+      ...asset,
+      variants: await Promise.all(asset.variants.map(async (variant) => ({ ...variant, url: await downloadUrl(variant.objectKey) })))
     })))
   };
 }

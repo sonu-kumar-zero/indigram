@@ -1,0 +1,3 @@
+CREATE TYPE "PostVisibility" AS ENUM ('PUBLIC', 'PRIVATE');
+ALTER TABLE "Post" ADD COLUMN "visibility" "PostVisibility" NOT NULL DEFAULT 'PUBLIC';
+ALTER TABLE "Post" ADD COLUMN "likesVisible" BOOLEAN NOT NULL DEFAULT true;

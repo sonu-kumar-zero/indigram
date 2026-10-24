@@ -31,7 +31,7 @@ async function ffmpeg(input: Buffer, args: string[], outputExtension: string, po
   }
 }
 
-export async function processVariant(post: { id: string; mediaType: MediaType; sourceKey: string; sourceMimeType: string }, variant: Variant) {
+export async function processVariant(post: { id: string; mediaType: MediaType; sourceKey: string; sourceMimeType: string }, variant: Variant, assetId: string) {
   const startedAt = Date.now();
   logger.info("variant processing started", { postId: post.id, variant, mediaType: post.mediaType });
   const source = await download(post.sourceKey);
@@ -45,7 +45,7 @@ export async function processVariant(post: { id: string; mediaType: MediaType; s
     mimeType = "image/webp";
     extension = "webp";
   } else if (post.mediaType === "IMAGE" && variant === "THUMBNAIL") {
-    body = await sharp(source).rotate().resize(512, 512, { fit: "cover" }).webp({ quality: 80 }).toBuffer();
+    body = await sharp(source).rotate().resize(512, 512, { fit: "inside", withoutEnlargement: true }).webp({ quality: 80 }).toBuffer();
     mimeType = "image/webp";
     extension = "webp";
   } else if (post.mediaType === "VIDEO" && variant === "VIDEO_720P") {
@@ -62,10 +62,11 @@ export async function processVariant(post: { id: string; mediaType: MediaType; s
   await upload(objectKey, body, mimeType);
   logger.info("variant uploaded", { postId: post.id, variant, bytes: body.length, objectKey, durationMs: Date.now() - startedAt });
   const metadata: Metadata | undefined = variant === "WEB" || variant === "THUMBNAIL" ? await sharp(body).metadata() : undefined;
+  const update = { objectKey, mimeType, size: body.length, width: metadata?.width, height: metadata?.height };
   await prisma.mediaVariant.upsert({
-    where: { postId_kind: { postId: post.id, kind: variant } },
-    create: { postId: post.id, kind: variant, objectKey, mimeType, size: body.length, ...(metadata?.width ? { width: metadata.width } : {}), ...(metadata?.height ? { height: metadata.height } : {}) },
-    update: { objectKey, mimeType, size: body.length, width: metadata?.width, height: metadata?.height }
+    where: { assetId_kind: { assetId, kind: variant } },
+    create: { postId: post.id, assetId, kind: variant, objectKey, mimeType, size: body.length, ...(metadata?.width ? { width: metadata.width } : {}), ...(metadata?.height ? { height: metadata.height } : {}) },
+    update
   });
   logger.info("variant processing completed", { postId: post.id, variant, durationMs: Date.now() - startedAt });
 }

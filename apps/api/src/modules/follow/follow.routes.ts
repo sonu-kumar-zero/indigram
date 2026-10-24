@@ -6,6 +6,7 @@ import { followController } from "./follow.controller.js";
 import { followListQuerySchema, usernameParamsSchema } from "./follow.validation.js";
 
 export const followRouter = Router();
+followRouter.get("/discover/latest", authenticate, asyncHandler(followController.latestUsers));
 followRouter.post("/:username/follow", authenticate, validateParams(usernameParamsSchema), asyncHandler(followController.follow));
 followRouter.delete("/:username/follow", authenticate, validateParams(usernameParamsSchema), asyncHandler(followController.unfollow));
 followRouter.get("/:username/follow-status", authenticate, validateParams(usernameParamsSchema), asyncHandler(followController.status));

@@ -8,6 +8,10 @@ async function targetUser(username: string) {
 }
 
 export const followService = {
+  async latestUsers(userId: string) {
+    const users = await followRepository.listLatestUsers(userId);
+    return users.map(({ followers, ...user }) => ({ ...user, following: followers.length > 0 }));
+  },
   async follow(followerId: string, username: string) {
     const target = await targetUser(username);
     if (followerId === target.id) {

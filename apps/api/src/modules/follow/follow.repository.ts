@@ -9,6 +9,21 @@ const publicUserSelect = {
 } as const;
 
 export const followRepository = {
+  listLatestUsers(userId: string) {
+    return prisma.user.findMany({
+      where: { id: { not: userId }, status: "ACTIVE" },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+      select: {
+        id: true,
+        username: true,
+        displayName: true,
+        bio: true,
+        avatarUrl: true,
+        followers: { where: { followerId: userId }, select: { followerId: true } }
+      }
+    });
+  },
   findActiveUserByUsername(username: string) {
     return prisma.user.findFirst({
       where: { username, status: "ACTIVE" },

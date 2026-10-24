@@ -32,13 +32,15 @@ async function processJob(job: Job<{ postId: string; variant: "ORIGINAL" | "WEB"
     import("@indigram/database"),
     import("./media-processing.js")
   ]);
-  const post = await prisma.post.findUnique({ where: { id: job.data.postId } });
+  const post = await prisma.post.findUnique({ where: { id: job.data.postId }, include: { assets: true } });
   if (!post) throw new Error(`Post ${job.data.postId} does not exist`);
-  await processVariant(post, job.data.variant);
+  if (!post.assets.length) throw new Error(`Post ${post.id} has no media assets`);
+  await Promise.all(post.assets.map((asset) => processVariant({ ...post, ...asset, id: post.id }, job.data.variant, asset.id)));
   await job.updateProgress(100);
   const expected = post.mediaType === "IMAGE" ? imageVariants : videoVariants;
-  const variants = await prisma.mediaVariant.findMany({ where: { postId: post.id }, select: { kind: true } });
-  if (expected.every((variant) => variants.some((item) => item.kind === variant))) {
+  const variants = await prisma.mediaVariant.findMany({ where: { postId: post.id }, select: { kind: true, assetId: true } });
+  const assetCount = post.assets.length;
+  if (expected.every((variant) => variants.filter((item) => item.kind === variant).length >= assetCount)) {
     await prisma.post.updateMany({ where: { id: post.id, status: "PROCESSING" }, data: { status: "PUBLISHED", publishedAt: new Date() } });
     logger.info("post published", { postId: post.id, variants: expected, durationMs: Date.now() - startedAt });
   } else {
