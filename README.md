@@ -22,6 +22,14 @@ npm run dev --workspace=@indigram/worker
 ```
 The API listens on `http://localhost:4000`; health check: `GET /health`, API base: `/api/v1`.
 
+To start the API, web app, media worker, and local Redis/MinIO dependencies together:
+
+```bash
+npm run dev:all
+```
+
+The web app listens on `http://localhost:5173`.
+
 ## Workspace layout
 - `apps/api`: HTTP server, auth routes/controllers/services, middleware.
 - `apps/worker`: BullMQ media worker with Sharp and FFmpeg processing.
@@ -72,6 +80,7 @@ The API creates the MinIO bucket `indigram-media` on startup. The upload flow is
 2. Upload the bytes with `PUT` to the returned presigned `uploadUrl`, sending the returned `content-type` header.
 3. `POST /api/v1/posts/:postId/complete` to enqueue processing.
 4. Poll `GET /api/v1/posts/:postId` until the status is `PUBLISHED` or `FAILED`.
+5. The authenticated profile view uses `GET /api/v1/posts?page=1&limit=50` to show the current user's uploads and processing states.
 
 Each submitted post fans out independent variant jobs:
 

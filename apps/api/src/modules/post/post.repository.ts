@@ -12,5 +12,14 @@ export const postRepository = {
   },
   findById(postId: string) {
     return prisma.post.findUnique({ where: { id: postId }, include: { variants: true } });
+  },
+  listOwned(authorId: string, skip: number, take: number) {
+    return prisma.post.findMany({
+      where: { authorId },
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: take + 1,
+      include: { variants: true }
+    });
   }
 };

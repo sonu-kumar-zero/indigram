@@ -1,4 +1,4 @@
-import { S3Client, CreateBucketCommand, HeadBucketCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, CreateBucketCommand, GetObjectCommand, HeadBucketCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { env } from "../config/env.js";
 
@@ -24,4 +24,8 @@ export async function ensureMediaBucket() {
 
 export function uploadUrl(key: string, contentType: string) {
   return getSignedUrl(s3, new PutObjectCommand({ Bucket: mediaBucket, Key: key, ContentType: contentType }), { expiresIn: 900 });
+}
+
+export function downloadUrl(key: string) {
+  return getSignedUrl(s3, new GetObjectCommand({ Bucket: mediaBucket, Key: key }), { expiresIn: 900 });
 }

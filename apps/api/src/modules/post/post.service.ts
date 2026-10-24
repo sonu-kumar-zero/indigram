@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { AppError } from "../../shared/errors/app-error.js";
 import { mediaQueue } from "../../shared/media-queue.js";
-import { uploadUrl } from "../../shared/media-storage.js";
+import { downloadUrl, uploadUrl } from "../../shared/media-storage.js";
 import { postRepository } from "./post.repository.js";
 
 export const postService = {
@@ -25,6 +25,27 @@ export const postService = {
   async get(authorId: string, postId: string) {
     const post = await postRepository.findById(postId);
     if (!post || post.authorId !== authorId) throw new AppError(404, "Post not found", "POST_NOT_FOUND");
-    return post;
+    return withMediaUrls(post);
+  },
+
+  async list(authorId: string, page: number, limit: number) {
+    const posts = await postRepository.listOwned(authorId, (page - 1) * limit, limit);
+    const hasMore = posts.length > limit;
+    return {
+      posts: await Promise.all(posts.slice(0, limit).map(withMediaUrls)),
+      page,
+      limit,
+      hasMore
+    };
   }
 };
+
+async function withMediaUrls<T extends { variants: Array<{ objectKey: string; kind: string }> }>(post: T) {
+  return {
+    ...post,
+    variants: await Promise.all(post.variants.map(async (variant) => ({
+      ...variant,
+      url: await downloadUrl(variant.objectKey)
+    })))
+  };
+}

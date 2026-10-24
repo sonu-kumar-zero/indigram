@@ -17,7 +17,9 @@
     "db:seed": "npm run db:seed --workspace=@indigram/database",
     "test": "npm run test --workspace=@indigram/api",
     "worker:dev": "npm run dev --workspace=@indigram/worker",
-    "worker:build": "npm run build --workspace=@indigram/worker"
+    "worker:build": "npm run build --workspace=@indigram/worker",
+    "predev:all": "npm run db:generate && npm run db:migrate && npm run build --workspace=@indigram/database && docker compose up -d postgres redis minio",
+    "dev:all": "concurrently --kill-others --names api,web,worker --prefix-colors blue,magenta,green \"npm run dev --workspace=@indigram/api\" \"npm run dev --workspace=@indigram/web\" \"npm run dev --workspace=@indigram/worker\""
   },
   "engines": {
     "node": ">=22.0.0",
@@ -30,6 +32,7 @@
     "pg": "^8.23.1"
   },
   "devDependencies": {
+    "concurrently": "^10.0.6",
     "prisma": "^7.10.1"
   }
 }

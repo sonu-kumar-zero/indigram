@@ -18,6 +18,9 @@ export const postController = {
   async create(req: Request, res: Response) {
     res.status(201).json({ data: await postService.create(auth(req), req.body) });
   },
+  async list(req: Request, res: Response) {
+    res.json({ data: await postService.list(auth(req), Number(req.query.page), Number(req.query.limit)) });
+  },
   async complete(req: Request, res: Response) {
     res.json({ data: await postService.complete(auth(req), postId(req)) });
   },
