@@ -28,8 +28,22 @@ model User {
   sessions          Session[]
   emailTokens       EmailVerificationToken[]
   passwordTokens    PasswordResetToken[]
+  following         Follow[]                  @relation("UserFollowing")
+  followers         Follow[]                  @relation("UserFollowers")
 
   @@index([createdAt])
+}
+
+model Follow {
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+  follower    User     @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+  @@index([followingId, createdAt])
+  @@index([followerId, createdAt])
 }
 
 model Session {
