@@ -12,6 +12,25 @@ enum UserStatus {
   DEACTIVATED
 }
 
+enum PostStatus {
+  AWAITING_UPLOAD
+  PROCESSING
+  PUBLISHED
+  FAILED
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+}
+
+enum MediaVariantKind {
+  ORIGINAL
+  WEB
+  THUMBNAIL
+  VIDEO_720P
+}
+
 model User {
   id                String                   @id @default(cuid())
   email             String                   @unique
@@ -30,8 +49,46 @@ model User {
   passwordTokens    PasswordResetToken[]
   following         Follow[]                  @relation("UserFollowing")
   followers         Follow[]                  @relation("UserFollowers")
+  posts             Post[]
 
   @@index([createdAt])
+}
+
+model Post {
+  id             String     @id @default(cuid())
+  authorId       String
+  caption        String?    @db.VarChar(2200)
+  status         PostStatus @default(AWAITING_UPLOAD)
+  mediaType      MediaType
+  sourceKey      String
+  sourceMimeType String
+  sourceSize     Int
+  failureReason  String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  publishedAt    DateTime?
+  author         User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  variants       MediaVariant[]
+
+  @@index([authorId, createdAt])
+  @@index([status, createdAt])
+}
+
+model MediaVariant {
+  id         String           @id @default(cuid())
+  postId     String
+  kind       MediaVariantKind
+  objectKey  String
+  mimeType   String
+  size       Int?
+  width      Int?
+  height     Int?
+  durationMs Int?
+  createdAt  DateTime         @default(now())
+  post        Post             @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, kind])
+  @@index([postId])
 }
 
 model Follow {

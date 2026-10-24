@@ -15,7 +15,9 @@
     "db:deploy": "npm run db:deploy --workspace=@indigram/database",
     "db:studio": "npm run db:studio --workspace=@indigram/database",
     "db:seed": "npm run db:seed --workspace=@indigram/database",
-    "test": "npm run test --workspace=@indigram/api"
+    "test": "npm run test --workspace=@indigram/api",
+    "worker:dev": "npm run dev --workspace=@indigram/worker",
+    "worker:build": "npm run build --workspace=@indigram/worker"
   },
   "engines": {
     "node": ">=22.0.0",
