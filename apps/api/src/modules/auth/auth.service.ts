@@ -27,10 +27,6 @@ async function issueSession(userId: string, client: ClientInfo) {
   return { accessToken, refreshToken, expiresAt };
 }
 
-function logDevelopmentToken(label: string, token: string): void {
-  if (env.NODE_ENV === "development") console.info(`[DEV ONLY] ${label}: ${token}`);
-}
-
 export const authService = {
   async register(input: { email: string; username: string; password: string; displayName: string }, client: ClientInfo) {
     if (await authRepository.findUserByEmail(input.email)) throw new AppError(409, "Email is already registered", "EMAIL_TAKEN");
@@ -104,7 +100,6 @@ export const authService = {
     await prisma.emailVerificationToken.create({
       data: { userId, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) }
     });
-    logDevelopmentToken("Email verification token", token);
   },
 
   async verifyEmail(token: string) {
@@ -130,7 +125,6 @@ export const authService = {
       await prisma.passwordResetToken.create({
         data: { userId: user.id, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + 60 * 60 * 1000) }
       });
-      logDevelopmentToken("Password reset token", token);
     }
     return { message: "If an account exists for that email, password reset instructions will be sent." };
   },
