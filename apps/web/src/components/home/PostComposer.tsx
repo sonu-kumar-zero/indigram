@@ -578,7 +578,7 @@ export function PostComposer({
                       event.stopPropagation();
                       removeItem(index);
                     }}
-                    className="absolute right-1 top-1 grid h-5 w-5 translate-y-[-2px] place-items-center rounded-full bg-black/75 text-xs leading-none text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-rose-500"
+                    className="absolute right-1 top-1 grid h-5 w-5 -translate-y-0.5 place-items-center rounded-full bg-black/75 text-xs leading-none text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-rose-500"
                   >
                     ×
                   </button>
