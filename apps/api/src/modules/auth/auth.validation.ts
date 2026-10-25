@@ -22,5 +22,11 @@ export const changePasswordSchema = z.object({ currentPassword: z.string().min(1
 export const updateProfileSchema = z.object({
   displayName: z.string().trim().min(1).max(80).optional(),
   bio: z.string().trim().max(160).nullable().optional(),
-  avatarUrl: z.string().url().max(2048).nullable().optional()
+  avatarUrl: z.string().url().max(2048).nullable().optional(),
+  avatarSourceKey: z.string().regex(/^profile-avatars\/[a-zA-Z0-9-]+\/source\.[a-z0-9]+$/, "Invalid avatar upload").nullable().optional(),
+  isPrivate: z.boolean().optional()
 }).refine((value) => Object.keys(value).length > 0, "At least one field is required");
+export const avatarUploadSchema = z.object({
+  mimeType: z.string().regex(/^image\/[a-z0-9.+-]+$/i),
+  size: z.number().int().positive().max(10 * 1024 * 1024)
+});

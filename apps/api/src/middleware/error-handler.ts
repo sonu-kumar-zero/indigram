@@ -5,6 +5,11 @@ import { logger } from "../shared/logger.js";
 
 export const errorHandler: ErrorRequestHandler = (error: unknown, req, res, _next) => {
   const requestId = req.id;
+  if (isPayloadTooLargeError(error)) {
+    req.log.warn({ requestId, limit: error.limit }, "Request body exceeded size limit");
+    res.status(413).json({ error: { code: "PAYLOAD_TOO_LARGE", message: "Request body is too large" } });
+    return;
+  }
   if (error instanceof ZodError) {
     req.log.warn({ err: error, requestId }, "Request validation failed");
     res.status(400).json({
@@ -20,3 +25,7 @@ export const errorHandler: ErrorRequestHandler = (error: unknown, req, res, _nex
   logger.error({ err: error, requestId }, "Unhandled request error");
   res.status(500).json({ error: { code: "INTERNAL_SERVER_ERROR", message: "An unexpected error occurred" } });
 };
+
+function isPayloadTooLargeError(error: unknown): error is { type: "entity.too.large"; limit?: number } {
+  return typeof error === "object" && error !== null && "type" in error && error.type === "entity.too.large";
+}

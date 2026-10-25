@@ -1,5 +1,5 @@
 import type { Comment, Post, User } from "../../types/api";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { engagementApi } from "../../api";
 import { Avatar } from "../Brand";
 import { OverlayMenu } from "../ui/OverlayMenu";
@@ -15,6 +15,7 @@ export function PostCard({ post, user, token }: { post: Post; user: User; token:
   const [replyTo, setReplyTo] = useState<string>();
   const [commentsError, setCommentsError] = useState("");
   const [busy, setBusy] = useState(false);
+  const mediaScroller = useRef<HTMLDivElement>(null);
   const assets = post.assets ?? [];
   const asset = assets[active];
   const assetVariants = asset?.variants ?? post.variants;
@@ -83,8 +84,13 @@ export function PostCard({ post, user, token }: { post: Post; user: User; token:
     if (navigator.share) await navigator.share({ title: post.caption ?? "Indigram post", url });
     else await navigator.clipboard.writeText(url);
   };
+  function scrollMedia(direction: number) {
+    const scroller = mediaScroller.current;
+    if (!scroller) return;
+    scroller.scrollBy({ left: direction * scroller.clientWidth, behavior: "smooth" });
+  }
   return (
-    <article className="mx-auto flex w-[50vw] max-w-180 min-w-[min(100%,20rem)] flex-col overflow-hidden rounded-2xl border border-white/8 bg-white/[0.035] transition hover:border-white/15">
+    <article className="mx-auto flex w-full min-w-0 max-w-180 flex-col overflow-hidden rounded-2xl border border-white/8 bg-white/[0.035] transition hover:border-white/15">
       <header className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
           <Avatar user={user} />
@@ -115,41 +121,68 @@ export function PostCard({ post, user, token }: { post: Post; user: User; token:
       ) : post.mediaType === "VIDEO" ? (
         <video
           controls
+          muted={post.videoMuted ?? false}
           poster={preview?.kind === "THUMBNAIL" ? preview.url : undefined}
           src={video?.url}
           className="block h-auto w-full bg-black"
         />
-      ) : preview ? (
+      ) : assets.length > 0 ? (
         <div className="relative w-full bg-black">
-          <img
-            src={preview.url}
-            alt={post.caption ?? "Uploaded post"}
-            className="block h-auto w-full"
-          />
+          <div
+            ref={mediaScroller}
+            onScroll={(event) => {
+              const scroller = event.currentTarget;
+              setActive(Math.round(scroller.scrollLeft / scroller.clientWidth));
+            }}
+            className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth [&::-webkit-scrollbar]:hidden"
+          >
+            {assets.map((item, index) => {
+              const itemPreview =
+                item.variants.find((variant) => variant.kind === "WEB") ??
+                item.variants.find((variant) => variant.kind === "THUMBNAIL") ??
+                item.variants.find((variant) => variant.kind === "ORIGINAL");
+              const itemVideo =
+                item.variants.find((variant) => variant.kind === "VIDEO_720P") ??
+                item.variants.find((variant) => variant.kind === "ORIGINAL");
+              return (
+                <div key={`${item.position}-${index}`} className="w-full shrink-0 snap-center">
+                  {(item.mediaType === "VIDEO" || post.mediaType === "VIDEO") ? (
+                    <video
+                      controls
+                      muted={item.videoMuted ?? false}
+                      poster={itemPreview?.kind === "THUMBNAIL" ? itemPreview.url : undefined}
+                      src={itemVideo?.url}
+                      className="block h-auto w-full"
+                    />
+                  ) : itemPreview ? (
+                    <img src={itemPreview.url} alt={post.caption ?? "Uploaded post"} className="block h-auto w-full" />
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
           {assets.length > 1 && (
             <>
               <button
-                onClick={() =>
-                  setActive(
-                    (value) => (value - 1 + assets.length) % assets.length,
-                  )
-                }
+                aria-label="Previous media"
+                onClick={() => scrollMedia(-1)}
                 className="absolute left-3 top-1/2 rounded-full bg-black/60 px-3 py-2 text-white"
               >
                 ‹
               </button>
               <button
-                onClick={() =>
-                  setActive((value) => (value + 1) % assets.length)
-                }
+                aria-label="Next media"
+                onClick={() => scrollMedia(1)}
                 className="absolute right-3 top-1/2 rounded-full bg-black/60 px-3 py-2 text-white"
               >
                 ›
               </button>
               <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5">
                 {assets.map((_, index) => (
-                  <span
+                  <button
                     key={index}
+                    aria-label={`Show media ${index + 1}`}
+                    onClick={() => mediaScroller.current?.scrollTo({ left: index * (mediaScroller.current?.clientWidth ?? 0), behavior: "smooth" })}
                     className={`h-1.5 w-1.5 rounded-full ${index === active ? "bg-white" : "bg-white/40"}`}
                   />
                 ))}

@@ -5,13 +5,14 @@ import { rateLimit } from "express-rate-limit";
 import { env } from "./config/env.js";
 import { apiRouter } from "./routes/index.js";
 import { errorHandler } from "./middleware/error-handler.js";
-import { requestLogger } from "./shared/logger.js";
+import { accessLogger, requestLogger } from "./shared/logger.js";
 import { getMetrics, getMetricsContentType, requestMetrics } from "./shared/metrics.js";
 
 export const app = express();
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
 app.use(requestLogger);
+app.use(accessLogger);
 app.use(requestMetrics);
 app.use(helmet());
 app.use(cors({ origin: env.WEB_ORIGIN, credentials: true }));

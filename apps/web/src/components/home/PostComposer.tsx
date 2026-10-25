@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { postsApi, uploadToStorage } from "../../api";
 import { Alert, Spinner } from "../ui/Feedback";
 
@@ -9,7 +9,19 @@ type Edit = {
   filter: string;
   frameRatio: number;
 };
-type ImageItem = { file: File; url: string; width: number; height: number; edit: Edit };
+type ImageItem = {
+  file: File;
+  url: string;
+  width: number;
+  height: number;
+  edit: Edit;
+  mediaType: "IMAGE" | "VIDEO";
+  duration?: number;
+  startTime?: number;
+  endTime?: number;
+  coverTime?: number;
+  muted?: boolean;
+};
 const frames = [
   ["1:1", 1],
   ["4:5", 4 / 5],
@@ -35,6 +47,7 @@ const filters = [
 ];
 
 async function renderImage(item: ImageItem) {
+  if (item.mediaType === "VIDEO") return item.file;
   const image = new Image();
   image.src = item.url;
   await new Promise<void>((resolve, reject) => {
@@ -111,6 +124,7 @@ export function PostComposer({
   const [busy, setBusy] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const reorderIndex = useRef<number | null>(null);
+  const videoPreview = useRef<HTMLVideoElement>(null);
   const dragStart = useRef<{
     clientX: number;
     clientY: number;
@@ -118,6 +132,11 @@ export function PostComposer({
     y: number;
   } | null>(null);
   const current = items[selected];
+  useEffect(() => {
+    if (current?.mediaType === "VIDEO" && videoPreview.current) {
+      videoPreview.current.currentTime = current.coverTime ?? current.startTime ?? 0;
+    }
+  }, [current?.coverTime, current?.startTime, step]);
   const previewStyle = useMemo(
     () =>
       current
@@ -135,17 +154,21 @@ export function PostComposer({
   ][step];
 
   function addFiles(files: FileList | File[]) {
-    const images = Array.from(files)
-      .filter((file) => file.type.startsWith("image/"))
-      .slice(0, 10 - items.length);
+    const selectedFiles = Array.from(files);
+    const media = selectedFiles.filter((file) => file.type.startsWith("image/") || file.type.startsWith("video/")).slice(0, 10 - items.length);
     setItems((existing) => [
       ...existing,
-      ...images.map((file) => ({
+      ...media.map((file) => ({
         file,
         url: URL.createObjectURL(file),
         width: 0,
         height: 0,
         edit: { scale: 1, x: 0, y: 0, filter: "none", frameRatio: 1 },
+        mediaType: file.type.startsWith("video/") ? "VIDEO" as const : "IMAGE" as const,
+        startTime: 0,
+        endTime: undefined,
+        coverTime: 0,
+        muted: false,
       })),
     ]);
     setMessage(null);
@@ -158,6 +181,9 @@ export function PostComposer({
           : item,
       ),
     );
+  }
+  function updateVideo(patch: Partial<Pick<ImageItem, "startTime" | "endTime" | "coverTime" | "muted">>) {
+    setItems((existing) => existing.map((item, index) => index === selected ? { ...item, ...patch } : item));
   }
   function startDrag(event: React.PointerEvent<HTMLDivElement>) {
     if (step !== 0 || !current) return;
@@ -232,9 +258,20 @@ export function PostComposer({
     setMessage(null);
     try {
       const files = await Promise.all(items.map(renderImage));
+      const hasVideo = items.some((item) => item.mediaType === "VIDEO");
       const post = await postsApi.create(token, {
-        mediaType: "IMAGE",
-        images: files.map((file) => ({ mimeType: file.type, size: file.size })),
+        mediaType: hasVideo ? "VIDEO" : "IMAGE",
+        media: items.map((item) => ({
+          mediaType: item.mediaType,
+          mimeType: item.file.type,
+          size: item.file.size,
+          ...(item.mediaType === "VIDEO" ? {
+            videoStartMs: Math.round((item.startTime ?? 0) * 1000),
+            videoEndMs: item.endTime === undefined ? undefined : Math.round(item.endTime * 1000),
+            videoCoverMs: Math.round((item.coverTime ?? 0) * 1000),
+            videoMuted: item.muted,
+          } : {}),
+        })),
         caption: caption || undefined,
         visibility: publicPost ? "PUBLIC" : "PRIVATE",
         likesVisible,
@@ -262,7 +299,7 @@ export function PostComposer({
   }
   const next = () => {
     if (!items.length)
-      return setMessage({ tone: "error", text: "Choose at least one image." });
+      return setMessage({ tone: "error", text: "Choose at least one photo or video." });
     setMessage(null);
     setStep((value) => Math.min(2, value + 1));
   };
@@ -290,7 +327,7 @@ export function PostComposer({
           </div>
           <h2 className="text-sm font-semibold text-white">
             {!items.length
-              ? "Choose photos"
+              ? "Choose photos or video"
               : ["Adjust", "Filters", "Final details"][step]}
           </h2>
           <div className="flex items-center justify-end gap-2">
@@ -327,15 +364,15 @@ export function PostComposer({
               <label className="cursor-pointer">
                 <span className="text-5xl text-[#ff9675]">＋</span>
                 <p className="mt-3 font-medium text-white">
-                  Drag photos here, or choose from your device
+                  Drag photos or a video here, or choose from your device
                 </p>
                 <p className="mt-1 text-xs text-zinc-500">
-                  Up to 10 images · 10 MB each
+                  Up to 10 images (10 MB each) or one video (250 MB)
                 </p>
                 <input
                   className="hidden"
                   type="file"
-                  accept="image/*"
+                  accept="image/*,video/*"
                   multiple
                   onChange={(event) => {
                     if (event.target.files) addFiles(event.target.files);
@@ -361,7 +398,19 @@ export function PostComposer({
                     width: `min(100%, max(50%, calc(70vh * ${current?.edit.frameRatio ?? 1})))`,
                   }}
                 >
-                  {current && (
+                  {current?.mediaType === "VIDEO" ? (
+                    <video
+                      ref={videoPreview}
+                      src={current.url}
+                      muted
+                      onLoadedMetadata={(event) => {
+                        const duration = event.currentTarget.duration;
+                        setItems((existing) => existing.map((item, index) => index === selected ? { ...item, duration, endTime: item.endTime ?? duration } : item));
+                      }}
+                      className="absolute inset-0 h-full w-full object-cover"
+                      style={{ filter: current.edit.filter }}
+                    />
+                  ) : current && (
                     <img
                       draggable={false}
                       onDragStart={(event) => event.preventDefault()}
@@ -446,7 +495,9 @@ export function PostComposer({
                     width: `min(100%, max(50%, calc(50vh * ${current?.edit.frameRatio ?? 1})))`,
                   }}
                 >
-                  {current && (
+                  {current?.mediaType === "VIDEO" ? (
+                    <video ref={videoPreview} src={current.url} muted className="absolute inset-0 h-full w-full object-cover" style={{ filter: current.edit.filter }} />
+                  ) : current && (
                     <img
                       draggable={false}
                       onDragStart={(event) => event.preventDefault()}
@@ -469,18 +520,53 @@ export function PostComposer({
                       onClick={() => updateEdit({ filter })}
                       className={`overflow-hidden rounded-xl border text-left ${current?.edit.filter === filter ? "border-[#ff9675]" : "border-white/10"}`}
                     >
-                      <img
-                        src={current?.url}
-                        alt=""
-                        className="aspect-square w-full object-cover"
-                        style={{ filter }}
-                      />
+                      {current?.mediaType === "VIDEO" ? (
+                        <video src={current.url} muted className="aspect-square w-full object-cover" style={{ filter }} />
+                      ) : (
+                        <img src={current?.url} alt="" className="aspect-square w-full object-cover" style={{ filter }} />
+                      )}
                       <span className="block px-2 py-1.5 text-[10px] text-zinc-300">
                         {name}
                       </span>
                     </button>
                   ))}
                 </div>
+                {current?.mediaType === "VIDEO" && (
+                  <div className="space-y-4 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                    <div>
+                      <div className="flex justify-between text-xs text-zinc-300">
+                        <span>Cover photo</span>
+                        <span>{(current.coverTime ?? 0).toFixed(1)}s</span>
+                      </div>
+                      <input
+                        aria-label="Choose video cover photo"
+                        type="range"
+                        min={current.startTime ?? 0}
+                        max={current.endTime ?? current.duration ?? 1}
+                        step="0.1"
+                        value={current.coverTime ?? 0}
+                        onChange={(event) => updateVideo({ coverTime: Number(event.target.value) })}
+                        className="w-full accent-[#ff9675]"
+                      />
+                    </div>
+                    <div>
+                      <p className="text-xs text-zinc-300">Video range</p>
+                      <input aria-label="Video start time" type="range" min="0" max={current.duration ?? 1} step="0.1" value={current.startTime ?? 0} onChange={(event) => {
+                        const startTime = Math.min(Number(event.target.value), (current.endTime ?? current.duration ?? 1) - 0.1);
+                        updateVideo({ startTime, coverTime: Math.max(startTime, current.coverTime ?? 0) });
+                      }} className="mt-2 w-full accent-[#ff9675]" />
+                      <input aria-label="Video end time" type="range" min="0" max={current.duration ?? 1} step="0.1" value={current.endTime ?? current.duration ?? 1} onChange={(event) => {
+                        const endTime = Math.max(Number(event.target.value), (current.startTime ?? 0) + 0.1);
+                        updateVideo({ endTime, coverTime: Math.min(endTime, current.coverTime ?? 0) });
+                      }} className="mt-2 w-full accent-[#ff9675]" />
+                      <div className="flex justify-between text-[10px] text-zinc-500"><span>{(current.startTime ?? 0).toFixed(1)}s</span><span>{(current.endTime ?? current.duration ?? 0).toFixed(1)}s</span></div>
+                    </div>
+                    <label className="flex items-center justify-between text-sm text-zinc-300">
+                      Audio
+                      <input type="checkbox" checked={!current.muted} onChange={(event) => updateVideo({ muted: !event.target.checked })} className="accent-[#ff9675]" />
+                    </label>
+                  </div>
+                )}
               </aside>
             </div>
           )}
@@ -494,7 +580,9 @@ export function PostComposer({
                     width: `min(100%, max(50%, calc(50vh * ${current?.edit.frameRatio ?? 1})))`,
                   }}
                 >
-                  {current && (
+                  {current?.mediaType === "VIDEO" ? (
+                    <video src={current.url} muted className="absolute inset-0 h-full w-full object-cover" style={{ filter: current.edit.filter }} />
+                  ) : current && (
                     <img
                       draggable={false}
                       onDragStart={(event) => event.preventDefault()}
@@ -563,17 +651,17 @@ export function PostComposer({
                     onClick={() => setSelected(index)}
                     className="block h-16 w-full overflow-hidden rounded-lg"
                   >
-                    <img
+                    {item.mediaType === "VIDEO" ? <video src={item.url} muted onLoadedMetadata={(event) => { event.currentTarget.currentTime = item.coverTime ?? 0; }} className="h-16 w-full object-cover" /> : <img
                       draggable={false}
                       src={item.url}
                       alt=""
                       className="h-16 w-full object-cover"
                       style={{ filter: item.edit.filter }}
-                    />
+                    />}
                   </button>
                   <button
                     type="button"
-                    aria-label={`Remove image ${index + 1}`}
+                    aria-label={`Remove ${item.mediaType === "VIDEO" ? "video" : "image"} ${index + 1}`}
                     onClick={(event) => {
                       event.stopPropagation();
                       removeItem(index);
@@ -590,7 +678,7 @@ export function PostComposer({
                   <input
                     className="hidden"
                     type="file"
-                    accept="image/*"
+                    accept="image/*,video/*"
                     multiple
                     onChange={(event) => {
                       if (event.target.files) addFiles(event.target.files);

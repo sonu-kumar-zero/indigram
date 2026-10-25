@@ -5,16 +5,19 @@ import { HomePage } from "../home/HomePage";
 import { ProfilePage } from "../profile/ProfilePage";
 import { MonitoringPage } from "../monitoring/MonitoringPage";
 import { Sidebar } from "./Sidebar";
+import { SettingsPage } from "../settings/SettingsPage";
 
-export type View = "home" | "profile" | "monitoring";
+export type View = "home" | "profile" | "monitoring" | "settings";
 
 export function AppShell({
   token,
   user,
+  onUserChange,
   onLogout,
 }: {
   token: string;
   user: User;
+  onUserChange: (user: User) => void;
   onLogout: () => void;
 }) {
   const [view, setView] = useState<View>("home");
@@ -69,8 +72,10 @@ export function AppShell({
             posts={posts}
             loading={loadingPosts}
             error={postsError}
-            onRefresh={loadPosts}
+            onOpenSettings={() => setView("settings")}
           />
+        ) : view === "settings" ? (
+          <SettingsPage token={token} user={user} onUserChange={onUserChange} />
         ) : (
           <MonitoringPage />
         )}

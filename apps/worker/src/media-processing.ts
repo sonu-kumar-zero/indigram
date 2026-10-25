@@ -31,7 +31,7 @@ async function ffmpeg(input: Buffer, args: string[], outputExtension: string, po
   }
 }
 
-export async function processVariant(post: { id: string; mediaType: MediaType; sourceKey: string; sourceMimeType: string }, variant: Variant, assetId: string) {
+export async function processVariant(post: { id: string; mediaType: MediaType; sourceKey: string; sourceMimeType: string; videoStartMs?: number | null; videoEndMs?: number | null; videoCoverMs?: number | null; videoMuted?: boolean }, variant: Variant, assetId: string) {
   const startedAt = Date.now();
   logger.info("variant processing started", { postId: post.id, variant, mediaType: post.mediaType });
   const source = await download(post.sourceKey);
@@ -49,11 +49,15 @@ export async function processVariant(post: { id: string; mediaType: MediaType; s
     mimeType = "image/webp";
     extension = "webp";
   } else if (post.mediaType === "VIDEO" && variant === "VIDEO_720P") {
-    body = await ffmpeg(source, ["-vf", "scale=-2:720", "-c:v", "libx264", "-preset", "fast", "-crf", "23"], "mp4", post.id, variant);
+    const trim = post.videoStartMs ? ["-ss", String(post.videoStartMs / 1000)] : [];
+    const duration = post.videoStartMs !== null && post.videoStartMs !== undefined && post.videoEndMs !== null && post.videoEndMs !== undefined
+      ? ["-t", String((post.videoEndMs - post.videoStartMs) / 1000)]
+      : post.videoEndMs ? ["-t", String(post.videoEndMs / 1000)] : [];
+    body = await ffmpeg(source, [...trim, ...duration, "-vf", "scale=-2:720", "-c:v", "libx264", "-preset", "fast", "-crf", "23", ...(post.videoMuted ? ["-an"] : [])], "mp4", post.id, variant);
     mimeType = "video/mp4";
     extension = "mp4";
   } else if (post.mediaType === "VIDEO" && variant === "THUMBNAIL") {
-    body = await ffmpeg(source, ["-frames:v", "1"], "jpg", post.id, variant);
+    body = await ffmpeg(source, [...(post.videoCoverMs ? ["-ss", String(post.videoCoverMs / 1000)] : []), "-frames:v", "1"], "jpg", post.id, variant);
     mimeType = "image/jpeg";
     extension = "jpg";
   }

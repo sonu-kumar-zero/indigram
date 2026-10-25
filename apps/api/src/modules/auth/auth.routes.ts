@@ -6,7 +6,7 @@ import { asyncHandler } from "../../shared/http/async-handler.js";
 import { validateBody } from "../../middleware/validate-request.js";
 import {
   changePasswordSchema, forgotPasswordSchema, loginSchema, refreshSchema, registerSchema,
-  resetPasswordSchema, tokenSchema, updateProfileSchema
+  resetPasswordSchema, tokenSchema, updateProfileSchema, avatarUploadSchema
 } from "./auth.validation.js";
 import { z } from "zod";
 
@@ -21,6 +21,7 @@ router.post("/logout", authenticate, asyncHandler(authController.logout));
 router.post("/logout-all", authenticate, asyncHandler(authController.logoutAll));
 router.get("/me", authenticate, asyncHandler(authController.me));
 router.patch("/me", authenticate, validateBody(updateProfileSchema), asyncHandler(authController.updateProfile));
+router.post("/me/avatar-upload", authenticate, validateBody(avatarUploadSchema), asyncHandler(authController.avatarUpload));
 router.post("/verify-email", validateBody(tokenSchema), asyncHandler(authController.verifyEmail));
 router.post("/resend-verification", authLimiter, validateBody(z.object({ email: z.string().email().transform((v) => v.toLowerCase()) })), asyncHandler(authController.resendVerification));
 router.post("/forgot-password", authLimiter, validateBody(forgotPasswordSchema), asyncHandler(authController.forgotPassword));

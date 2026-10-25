@@ -14,6 +14,12 @@ function username(req: Request) {
   return value;
 }
 
+function followerUsername(req: Request) {
+  const value = req.params.followerUsername;
+  if (typeof value !== "string") throw new Error("follower username parameter is missing");
+  return value;
+}
+
 export const followController = {
   async latestUsers(req: Request, res: Response) {
     res.json({ data: await followService.latestUsers(userId(req)) });
@@ -23,6 +29,9 @@ export const followController = {
   },
   async unfollow(req: Request, res: Response) {
     res.json({ data: await followService.unfollow(userId(req), username(req)) });
+  },
+  async removeFollower(req: Request, res: Response) {
+    res.json({ data: await followService.removeFollower(userId(req), username(req), followerUsername(req)) });
   },
   async status(req: Request, res: Response) {
     res.json({ data: await followService.status(userId(req), username(req)) });

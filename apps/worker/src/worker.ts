@@ -14,9 +14,9 @@ async function fanOut(job: Job<{ postId: string }>) {
   const startedAt = Date.now();
   logger.info("fan-out job started", { jobId: job.id, postId: job.data.postId, attempt: job.attemptsMade + 1 });
   const { prisma } = await import("@indigram/database");
-  const post = await prisma.post.findUnique({ where: { id: job.data.postId } });
+  const post = await prisma.post.findUnique({ where: { id: job.data.postId }, include: { assets: true } });
   if (!post) throw new Error(`Post ${job.data.postId} does not exist`);
-  const variants = post.mediaType === "IMAGE" ? imageVariants : videoVariants;
+  const variants = [...new Set(post.assets.flatMap((asset) => asset.mediaType === "IMAGE" ? imageVariants : videoVariants))];
   await queue.addBulk(variants.map((variant) => ({
     name: `process-${variant.toLowerCase()}`,
     data: { postId: post.id, variant },
@@ -35,22 +35,45 @@ async function processJob(job: Job<{ postId: string; variant: "ORIGINAL" | "WEB"
   const post = await prisma.post.findUnique({ where: { id: job.data.postId }, include: { assets: true } });
   if (!post) throw new Error(`Post ${job.data.postId} does not exist`);
   if (!post.assets.length) throw new Error(`Post ${post.id} has no media assets`);
-  await Promise.all(post.assets.map((asset) => processVariant({ ...post, ...asset, id: post.id }, job.data.variant, asset.id)));
+  await Promise.all(post.assets.map((asset) => {
+    const variants = asset.mediaType === "IMAGE" ? imageVariants : videoVariants;
+    if (!variants.includes(job.data.variant as never)) return Promise.resolve();
+    return processVariant({ ...post, ...asset, id: post.id }, job.data.variant, asset.id);
+  }));
   await job.updateProgress(100);
-  const expected = post.mediaType === "IMAGE" ? imageVariants : videoVariants;
+  const expected = post.assets.flatMap((asset) => asset.mediaType === "IMAGE" ? imageVariants : videoVariants);
   const variants = await prisma.mediaVariant.findMany({ where: { postId: post.id }, select: { kind: true, assetId: true } });
-  const assetCount = post.assets.length;
-  if (expected.every((variant) => variants.filter((item) => item.kind === variant).length >= assetCount)) {
+  const complete = post.assets.every((asset) => {
+    const needed = asset.mediaType === "IMAGE" ? imageVariants : videoVariants;
+    return needed.every((kind) => variants.some((item) => item.assetId === asset.id && item.kind === kind));
+  });
+  if (complete) {
     await prisma.post.updateMany({ where: { id: post.id, status: "PROCESSING" }, data: { status: "PUBLISHED", publishedAt: new Date() } });
     logger.info("post published", { postId: post.id, variants: expected, durationMs: Date.now() - startedAt });
   } else {
     logger.info("variant job completed", { jobId: job.id, postId: post.id, variant: job.data.variant, completedVariants: variants.map((item) => item.kind), durationMs: Date.now() - startedAt });
   }
+
+}
+
+async function processProfileAvatar(job: Job<{ userId: string; sourceKey: string }>) {
+  const [{ prisma }, { download, upload }, sharpModule] = await Promise.all([
+    import("@indigram/database"),
+    import("./storage.js"),
+    import("sharp")
+  ]);
+  const source = await download(job.data.sourceKey);
+  const body = await sharpModule.default(source).rotate().resize(512, 512, { fit: "cover" }).webp({ quality: 86 }).toBuffer();
+  const objectKey = `profile-avatars/${job.data.userId}/avatar.webp`;
+  await upload(objectKey, body, "image/webp");
+  await prisma.user.update({ where: { id: job.data.userId }, data: { avatarUrl: objectKey, avatarSourceKey: job.data.sourceKey, avatarSourceMimeType: "image/webp", avatarSourceSize: body.length } });
+  logger.info("profile avatar processed", { userId: job.data.userId, objectKey, bytes: body.length });
 }
 
 const worker = new Worker("media-processing", async (job) => {
   logger.info("job received", { jobId: job.id, name: job.name, data: job.data, attempt: job.attemptsMade + 1 });
   if (job.name === "fan-out-media-variants") await fanOut(job);
+  else if (job.name === "process-profile-avatar") await processProfileAvatar(job as Job<{ userId: string; sourceKey: string }>);
   else await processJob(job as Job<{ postId: string; variant: "ORIGINAL" | "WEB" | "THUMBNAIL" | "VIDEO_720P" }>);
 }, { connection, concurrency: 2 });
 
@@ -66,8 +89,10 @@ worker.on("failed", async (job, error) => {
   logger.error("job failed", { jobId: job.id, name: job.name, postId: job.data.postId, attempt: job.attemptsMade, maxAttempts: job.opts.attempts, error: error.message, stack: error.stack });
   if (job.attemptsMade < (job.opts.attempts ?? 1)) return;
   const { prisma } = await import("@indigram/database");
-  const changed = await prisma.post.updateMany({ where: { id: job.data.postId, status: "PROCESSING" }, data: { status: "FAILED", failureReason: error.message.slice(0, 500) } });
-  if (changed.count > 0) logger.error("post marked failed", { postId: job.data.postId, error: error.message });
+  if ("postId" in job.data) {
+    const changed = await prisma.post.updateMany({ where: { id: job.data.postId, status: "PROCESSING" }, data: { status: "FAILED", failureReason: error.message.slice(0, 500) } });
+    if (changed.count > 0) logger.error("post marked failed", { postId: job.data.postId, error: error.message });
+  }
 });
 
 connection.on("connect", () => logger.info("redis connected", { redisUrl: env.REDIS_URL.replace(/\/\/.*@/, "//***@") }));

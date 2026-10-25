@@ -1,5 +1,17 @@
 import { AppError } from "../../shared/errors/app-error.js";
+import { downloadUrl } from "../../shared/media-storage.js";
 import { engagementRepository } from "./engagement.repository.js";
+
+async function withAvatarUrl<T extends { avatarUrl: string | null }>(user: T) {
+  return {
+    ...user,
+    avatarUrl: user.avatarUrl
+      ? user.avatarUrl.startsWith("http") || user.avatarUrl.startsWith("data:")
+        ? user.avatarUrl
+        : await downloadUrl(user.avatarUrl)
+      : null
+  };
+}
 
 async function accessiblePost(postId: string, userId: string) {
   const post = await engagementRepository.findPost(postId);
@@ -49,6 +61,7 @@ export const engagementService = {
     const comment = await engagementRepository.createComment(postId, userId, content, parentId);
     return {
       ...comment,
+      author: await withAvatarUrl(comment.author),
       likesCount: 0,
       repliesCount: 0,
       likedByMe: false,
@@ -59,22 +72,24 @@ export const engagementService = {
     await accessiblePost(postId, userId);
     const rows = await engagementRepository.listComments(postId, userId, (page - 1) * limit, limit);
     const hasMore = rows.length > limit;
-    const comments = rows.slice(0, limit).map((comment) => ({
+    const comments = await Promise.all(rows.slice(0, limit).map(async (comment) => ({
       ...comment,
+      author: await withAvatarUrl(comment.author),
       likesCount: comment._count.likes,
       repliesCount: comment._count.replies,
       likedByMe: comment.likes.length > 0,
       _count: undefined,
       likes: undefined,
-      replies: comment.replies.map((reply) => ({
+      replies: await Promise.all(comment.replies.map(async (reply) => ({
         ...reply,
+        author: await withAvatarUrl(reply.author),
         likesCount: reply._count.likes,
         repliesCount: reply._count.replies,
         likedByMe: reply.likes.length > 0,
         _count: undefined,
         likes: undefined
-      }))
-    }));
+      })))
+    })));
     return { comments, page, limit, hasMore };
   },
   async deleteComment(userId: string, commentId: string) {

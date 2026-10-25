@@ -38,6 +38,9 @@ export const authController = {
   async updateProfile(req: Request, res: Response) {
     res.json({ data: await authService.updateProfile(auth(req).userId, req.body) });
   },
+  async avatarUpload(req: Request, res: Response) {
+    res.json({ data: await authService.avatarUpload(auth(req).userId, req.body) });
+  },
   async verifyEmail(req: Request, res: Response) {
     res.json({ data: await authService.verifyEmail(req.body.token) });
   },

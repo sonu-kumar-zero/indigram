@@ -5,16 +5,20 @@ import { downloadUrl, uploadUrl } from "../../shared/media-storage.js";
 import { postRepository } from "./post.repository.js";
 
 export const postService = {
-  async create(authorId: string, input: { mediaType: "IMAGE" | "VIDEO"; mimeType?: string; size?: number; images?: Array<{ mimeType: string; size: number }>; caption?: string; visibility?: "PUBLIC" | "PRIVATE"; likesVisible?: boolean }) {
+  async create(authorId: string, input: { mediaType: "IMAGE" | "VIDEO"; mimeType?: string; size?: number; images?: Array<{ mimeType: string; size: number }>; media?: Array<{ mediaType: "IMAGE" | "VIDEO"; mimeType: string; size: number; videoStartMs?: number; videoEndMs?: number; videoCoverMs?: number; videoMuted?: boolean }>; caption?: string; visibility?: "PUBLIC" | "PRIVATE"; likesVisible?: boolean; videoStartMs?: number; videoEndMs?: number; videoCoverMs?: number; videoMuted?: boolean }) {
     const postId = randomUUID();
-    const images = input.images ?? [{ mimeType: input.mimeType!, size: input.size! }];
-    const uploads = await Promise.all(images.map(async (image, position) => {
+    const media = input.media ?? (input.images ? input.images.map((image) => ({ ...image, mediaType: "IMAGE" as const, videoStartMs: undefined, videoEndMs: undefined, videoCoverMs: undefined, videoMuted: undefined })) : [{ mediaType: input.mediaType, mimeType: input.mimeType!, size: input.size!, videoStartMs: input.videoStartMs, videoEndMs: input.videoEndMs, videoCoverMs: input.videoCoverMs, videoMuted: input.videoMuted }]);
+    const uploads = await Promise.all(media.map(async (image, position) => {
       const extension = image.mimeType.split("/")[1]?.split("+")[0] ?? "bin";
       const sourceKey = `originals/${authorId}/${postId}/${position}.${extension}`;
       return { position, sourceKey, sourceMimeType: image.mimeType, sourceSize: image.size, uploadUrl: await uploadUrl(sourceKey, image.mimeType), uploadMethod: "PUT", uploadHeaders: { "content-type": image.mimeType }, expiresIn: 900 };
     }));
     const first = uploads[0]!;
-    const post = await postRepository.create({ authorId, mediaType: input.mediaType, sourceKey: first.sourceKey, sourceMimeType: first.sourceMimeType, sourceSize: first.sourceSize, visibility: input.visibility, likesVisible: input.likesVisible, assets: uploads.map(({ position, sourceKey, sourceMimeType, sourceSize }) => ({ position, sourceKey, sourceMimeType, sourceSize })), ...(input.caption ? { caption: input.caption } : {}) });
+    const postMediaType = new Set(media.map((item) => item.mediaType)).size > 1 ? "MIXED" : media[0]!.mediaType;
+    const post = await postRepository.create({ authorId, mediaType: postMediaType, sourceKey: first.sourceKey, sourceMimeType: first.sourceMimeType, sourceSize: first.sourceSize, visibility: input.visibility, likesVisible: input.likesVisible, assets: uploads.map(({ position, sourceKey, sourceMimeType, sourceSize }, index) => {
+      const item = media[index]!;
+      return { position, sourceKey, sourceMimeType, sourceSize, mediaType: item.mediaType, videoStartMs: item.videoStartMs, videoEndMs: item.videoEndMs, videoCoverMs: item.videoCoverMs, videoMuted: item.videoMuted };
+    }), ...(input.caption ? { caption: input.caption } : {}) });
     return { postId: post.id, status: post.status, uploads };
   },
 

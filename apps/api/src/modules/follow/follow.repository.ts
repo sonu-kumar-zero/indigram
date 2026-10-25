@@ -55,6 +55,10 @@ export const followRepository = {
     });
   },
 
+  countFollowers(userId: string) {
+    return prisma.follow.count({ where: { followingId: userId, follower: { status: "ACTIVE" } } });
+  },
+
   listFollowing(userId: string, skip: number, take: number) {
     return prisma.follow.findMany({
       where: { followerId: userId, following: { status: "ACTIVE" } },
@@ -63,5 +67,13 @@ export const followRepository = {
       take: take + 1,
       select: { following: { select: publicUserSelect } }
     });
+  }
+  ,
+  countFollowing(userId: string) {
+    return prisma.follow.count({ where: { followerId: userId, following: { status: "ACTIVE" } } });
+  },
+
+  removeFollower(followerId: string, followingId: string) {
+    return prisma.follow.deleteMany({ where: { followerId, followingId } });
   }
 };

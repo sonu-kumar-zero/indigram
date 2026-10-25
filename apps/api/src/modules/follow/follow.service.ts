@@ -1,4 +1,5 @@
 import { AppError } from "../../shared/errors/app-error.js";
+import { downloadUrl } from "../../shared/media-storage.js";
 import { followRepository } from "./follow.repository.js";
 
 async function targetUser(username: string) {
@@ -7,10 +8,24 @@ async function targetUser(username: string) {
   return user;
 }
 
+async function withAvatarUrl<T extends { avatarUrl: string | null }>(user: T) {
+  return {
+    ...user,
+    avatarUrl: user.avatarUrl
+      ? user.avatarUrl.startsWith("http") || user.avatarUrl.startsWith("data:")
+        ? user.avatarUrl
+        : await downloadUrl(user.avatarUrl)
+      : null
+  };
+}
+
 export const followService = {
   async latestUsers(userId: string) {
     const users = await followRepository.listLatestUsers(userId);
-    return users.map(({ followers, ...user }) => ({ ...user, following: followers.length > 0 }));
+    return Promise.all(users.map(async ({ followers, ...user }) => ({
+      ...(await withAvatarUrl(user)),
+      following: followers.length > 0
+    })));
   },
   async follow(followerId: string, username: string) {
     const target = await targetUser(username);
@@ -33,6 +48,14 @@ export const followService = {
     return { following: false, username: target.username };
   },
 
+  async removeFollower(ownerId: string, profileUsername: string, followerUsername: string) {
+    const owner = await targetUser(profileUsername);
+    if (owner.id !== ownerId) throw new AppError(403, "You can only manage your own followers", "FOLLOWER_MANAGEMENT_FORBIDDEN");
+    const follower = await targetUser(followerUsername);
+    await followRepository.removeFollower(follower.id, ownerId);
+    return { removed: true, username: follower.username };
+  },
+
   async status(followerId: string, username: string) {
     const target = await targetUser(username);
     const follow = followerId === target.id ? null : await followRepository.findFollow(followerId, target.id);
@@ -41,15 +64,23 @@ export const followService = {
 
   async listFollowers(username: string, page: number, limit: number) {
     const target = await targetUser(username);
-    const rows = await followRepository.listFollowers(target.id, (page - 1) * limit, limit);
+    const [rows, total] = await Promise.all([
+      followRepository.listFollowers(target.id, (page - 1) * limit, limit),
+      followRepository.countFollowers(target.id)
+    ]);
     const hasMore = rows.length > limit;
-    return { users: rows.slice(0, limit).map((row) => row.follower), page, limit, hasMore };
+    const users = await Promise.all(rows.slice(0, limit).map((row) => withAvatarUrl(row.follower)));
+    return { users, page, limit, total, hasMore };
   },
 
   async listFollowing(username: string, page: number, limit: number) {
     const target = await targetUser(username);
-    const rows = await followRepository.listFollowing(target.id, (page - 1) * limit, limit);
+    const [rows, total] = await Promise.all([
+      followRepository.listFollowing(target.id, (page - 1) * limit, limit),
+      followRepository.countFollowing(target.id)
+    ]);
     const hasMore = rows.length > limit;
-    return { users: rows.slice(0, limit).map((row) => row.following), page, limit, hasMore };
+    const users = await Promise.all(rows.slice(0, limit).map((row) => withAvatarUrl(row.following)));
+    return { users, page, limit, total, hasMore };
   }
 };

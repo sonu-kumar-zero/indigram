@@ -1,4 +1,35 @@
-export function SuggestedUsers(_props: { token: string }) {
+import { useEffect, useState } from "react";
+import { followsApi } from "../../api/follows";
+import type { SuggestedUser } from "../../types/api";
+import { Avatar } from "../Brand";
+
+export function SuggestedUsers({ token }: { token: string }) {
+  const [users, setUsers] = useState<SuggestedUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    followsApi.latestUsers(token)
+      .then((result) => { if (active) setUsers(result); })
+      .catch(() => { if (active) setUsers([]); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [token]);
+
+  async function toggle(user: SuggestedUser) {
+    setBusy(user.username);
+    try {
+      const result = user.following
+        ? await followsApi.unfollow(token, user.username)
+        : await followsApi.follow(token, user.username);
+      setUsers((current) => current.map((item) => item.username === user.username ? { ...item, following: result.following } : item));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <aside className="p-5 lg:pl-8">
       <div className="mb-5">
@@ -8,9 +39,26 @@ export function SuggestedUsers(_props: { token: string }) {
         <h2 className="mt-1 font-semibold text-white">People to follow</h2>
       </div>
       <div className="space-y-5" aria-label="People to follow">
-        {Array.from({ length: 2 }, (_, index) => (
+        {loading ? Array.from({ length: 2 }, (_, index) => (
           <UserSkeleton key={index} />
-        ))}
+        )) : users.length ? users.map((user) => (
+          <div key={user.id} className="flex items-center gap-3">
+            <Avatar user={user} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-zinc-200">{user.displayName}</p>
+              <p className="truncate text-xs text-zinc-600">@{user.username}</p>
+            </div>
+            <button
+              disabled={busy === user.username}
+              onClick={() => void toggle(user)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:opacity-50 ${user.following ? "border border-white/10 text-zinc-400 hover:border-rose-400/40 hover:text-rose-300" : "bg-[#ff9675] text-[#291719] hover:bg-[#ffb29b]"}`}
+            >
+              {busy === user.username ? "…" : user.following ? "Following" : "Follow"}
+            </button>
+          </div>
+        )) : (
+          <p className="text-sm text-zinc-600">No new people to follow.</p>
+        )}
       </div>
     </aside>
   );

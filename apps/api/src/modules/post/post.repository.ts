@@ -1,7 +1,7 @@
 import { prisma } from "@indigram/database";
 
 export const postRepository = {
-  create(data: { authorId: string; caption?: string; mediaType: "IMAGE" | "VIDEO"; sourceKey: string; sourceMimeType: string; sourceSize: number; visibility?: "PUBLIC" | "PRIVATE"; likesVisible?: boolean; assets?: Array<{ position: number; sourceKey: string; sourceMimeType: string; sourceSize: number }> }) {
+  create(data: { authorId: string; caption?: string; mediaType: "IMAGE" | "VIDEO" | "MIXED"; sourceKey: string; sourceMimeType: string; sourceSize: number; visibility?: "PUBLIC" | "PRIVATE"; likesVisible?: boolean; videoStartMs?: number; videoEndMs?: number; videoCoverMs?: number; videoMuted?: boolean; assets?: Array<{ position: number; sourceKey: string; sourceMimeType: string; sourceSize: number; mediaType: "IMAGE" | "VIDEO"; videoStartMs?: number; videoEndMs?: number; videoCoverMs?: number; videoMuted?: boolean }> }) {
     return prisma.post.create({ data: { ...data, assets: data.assets ? { create: data.assets } : undefined } });
   },
   findOwned(postId: string, authorId: string) {

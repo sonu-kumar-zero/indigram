@@ -32,7 +32,7 @@ export function App() {
     }} />;
   }
 
-  return <AppShell token={token} user={user} onLogout={() => {
+  return <AppShell token={token} user={user} onUserChange={setUser} onLogout={() => {
     localStorage.removeItem("indigram_access_token");
     setToken(null);
     setUser(null);

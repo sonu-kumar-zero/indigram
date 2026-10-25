@@ -37,3 +37,22 @@ export const requestLogger: RequestHandler = pinoHttp<Request, Response>({
   customSuccessMessage: (req: Request, res: Response) => `${req.method} ${req.originalUrl || req.url} ${res.statusCode}`,
   customErrorMessage: (req: Request, res: Response, error: Error) => `${req.method} ${req.originalUrl || req.url} ${res.statusCode}: ${error.message}`
 });
+
+export const accessLogger: RequestHandler = (req, res, next) => {
+  const startedAt = process.hrtime.bigint();
+  res.once("finish", () => {
+    const durationMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
+    const url = req.originalUrl || req.url;
+    logger.info(
+      {
+        requestId: req.id,
+        method: req.method,
+        url,
+        statusCode: res.statusCode,
+        durationMs: Number(durationMs.toFixed(2))
+      },
+      `API ${req.method} ${url} ${res.statusCode} ${durationMs.toFixed(1)}ms`
+    );
+  });
+  next();
+};

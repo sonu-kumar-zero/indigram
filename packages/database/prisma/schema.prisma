@@ -22,6 +22,7 @@ enum PostStatus {
 enum MediaType {
   IMAGE
   VIDEO
+  MIXED
 }
 
 enum PostVisibility {
@@ -44,6 +45,10 @@ model User {
   displayName       String
   bio               String?                  @db.VarChar(160)
   avatarUrl         String?
+  avatarSourceKey   String?
+  avatarSourceMimeType String?
+  avatarSourceSize  Int?
+  isPrivate         Boolean                  @default(false)
   status            UserStatus               @default(ACTIVE)
   emailVerifiedAt   DateTime?
   passwordChangedAt DateTime?
@@ -73,6 +78,10 @@ model Post {
   sourceKey      String
   sourceMimeType String
   sourceSize     Int
+  videoStartMs   Int?
+  videoEndMs     Int?
+  videoCoverMs   Int?
+  videoMuted     Boolean    @default(false)
   failureReason  String?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
@@ -94,6 +103,11 @@ model PostAsset {
   sourceKey      String
   sourceMimeType String
   sourceSize     Int
+  mediaType      MediaType
+  videoStartMs   Int?
+  videoEndMs     Int?
+  videoCoverMs   Int?
+  videoMuted     Boolean    @default(false)
   post           Post            @relation(fields: [postId], references: [id], onDelete: Cascade)
   variants       MediaVariant[]
 

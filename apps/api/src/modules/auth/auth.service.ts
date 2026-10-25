@@ -5,12 +5,15 @@ import { prisma } from "@indigram/database";
 import { env } from "../../config/env.js";
 import { AppError } from "../../shared/errors/app-error.js";
 import { authRepository } from "./auth.repository.js";
+import { randomUUID } from "node:crypto";
+import { uploadUrl, downloadUrl } from "../../shared/media-storage.js";
+import { mediaQueue } from "../../shared/media-queue.js";
 
 const hashToken = (token: string): string => createHash("sha256").update(token).digest("hex");
 const randomToken = (): string => randomBytes(32).toString("base64url");
-const safeUser = (user: { id: string; email: string; username: string; displayName: string; bio: string | null; avatarUrl: string | null; emailVerifiedAt: Date | null; createdAt: Date }) => ({
+const safeUser = async (user: { id: string; email: string; username: string; displayName: string; bio: string | null; avatarUrl: string | null; isPrivate: boolean; emailVerifiedAt: Date | null; createdAt: Date }) => ({
   id: user.id, email: user.email, username: user.username, displayName: user.displayName,
-  bio: user.bio, avatarUrl: user.avatarUrl, emailVerified: Boolean(user.emailVerifiedAt), createdAt: user.createdAt
+  bio: user.bio, avatarUrl: user.avatarUrl ? (user.avatarUrl.startsWith("http") || user.avatarUrl.startsWith("data:") ? user.avatarUrl : await downloadUrl(user.avatarUrl)) : null, isPrivate: user.isPrivate, emailVerified: Boolean(user.emailVerifiedAt), createdAt: user.createdAt
 });
 
 type ClientInfo = { userAgent?: string; ipAddress?: string };
@@ -42,7 +45,7 @@ export const authService = {
       throw error;
     }
     await this.createVerificationToken(user.id);
-    return { user: safeUser(user), ...(await issueSession(user.id, client)) };
+    return { user: await safeUser(user), ...(await issueSession(user.id, client)) };
   },
 
   async login(input: { identifier: string; password: string }, client: ClientInfo) {
@@ -51,7 +54,7 @@ export const authService = {
       throw new AppError(401, "Invalid credentials", "INVALID_CREDENTIALS");
     }
     if (user.status !== "ACTIVE") throw new AppError(403, "This account is not active", "ACCOUNT_INACTIVE");
-    return { user: safeUser(user), ...(await issueSession(user.id, client)) };
+    return { user: await safeUser(user), ...(await issueSession(user.id, client)) };
   },
 
   async refresh(refreshToken: string) {
@@ -84,15 +87,32 @@ export const authService = {
   async me(userId: string) {
     const user = await authRepository.findUserById(userId);
     if (!user) throw new AppError(404, "User not found", "USER_NOT_FOUND");
-    return safeUser(user);
+    return await safeUser(user);
   },
 
-  async updateProfile(userId: string, input: { displayName?: string; bio?: string | null; avatarUrl?: string | null }) {
+  async avatarUpload(userId: string, input: { mimeType: string; size: number }) {
+    const extension = input.mimeType.split("/")[1]?.split("+")[0] ?? "bin";
+    const sourceKey = `profile-avatars/${userId}/source.${extension}`;
+    return { uploadUrl: await uploadUrl(sourceKey, input.mimeType), uploadHeaders: { "content-type": input.mimeType }, sourceKey };
+  },
+
+  async updateProfile(userId: string, input: { email?: string; username?: string; displayName?: string; bio?: string | null; avatarUrl?: string | null; avatarSourceKey?: string | null; isPrivate?: boolean }) {
+    if (input.avatarSourceKey && !input.avatarSourceKey.startsWith(`profile-avatars/${userId}/`)) {
+      throw new AppError(400, "Invalid avatar upload", "INVALID_AVATAR_UPLOAD");
+    }
+    if (input.username && await authRepository.findUserByUsername(input.username)) throw new AppError(409, "Username is already taken", "USERNAME_TAKEN");
+    if (input.email) {
+      const existing = await authRepository.findUserByEmail(input.email);
+      if (existing && existing.id !== userId) throw new AppError(409, "Email is already in use", "EMAIL_TAKEN");
+    }
     const user = await prisma.user.update({
       where: { id: userId },
-      data: { ...input }
+      data: { ...input, ...(input.avatarSourceKey ? { avatarUrl: null } : {}) }
     });
-    return safeUser(user);
+    if (input.avatarSourceKey) {
+      await mediaQueue.add("process-profile-avatar", { userId, sourceKey: input.avatarSourceKey }, { jobId: `profile-avatar-${userId}`, removeOnComplete: 1000, removeOnFail: 1000 });
+    }
+    return await safeUser(user);
   },
 
   async createVerificationToken(userId: string) {
