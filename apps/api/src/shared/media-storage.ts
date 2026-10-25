@@ -9,6 +9,12 @@ export const s3 = new S3Client({
   forcePathStyle: env.S3_FORCE_PATH_STYLE,
   credentials: { accessKeyId: env.S3_ACCESS_KEY_ID, secretAccessKey: env.S3_SECRET_ACCESS_KEY }
 });
+const publicS3 = new S3Client({
+  endpoint: env.S3_PUBLIC_ENDPOINT,
+  region: env.S3_REGION,
+  forcePathStyle: env.S3_FORCE_PATH_STYLE,
+  credentials: { accessKeyId: env.S3_ACCESS_KEY_ID, secretAccessKey: env.S3_SECRET_ACCESS_KEY }
+});
 
 export async function ensureMediaBucket() {
   try {
@@ -23,9 +29,9 @@ export async function ensureMediaBucket() {
 }
 
 export function uploadUrl(key: string, contentType: string) {
-  return getSignedUrl(s3, new PutObjectCommand({ Bucket: mediaBucket, Key: key, ContentType: contentType }), { expiresIn: 900 });
+  return getSignedUrl(publicS3, new PutObjectCommand({ Bucket: mediaBucket, Key: key, ContentType: contentType }), { expiresIn: 900 });
 }
 
 export function downloadUrl(key: string) {
-  return getSignedUrl(s3, new GetObjectCommand({ Bucket: mediaBucket, Key: key }), { expiresIn: 900 });
+  return getSignedUrl(publicS3, new GetObjectCommand({ Bucket: mediaBucket, Key: key }), { expiresIn: 900 });
 }

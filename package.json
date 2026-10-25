@@ -18,8 +18,9 @@
     "test": "npm run test --workspace=@indigram/api",
     "worker:dev": "npm run dev --workspace=@indigram/worker",
     "worker:build": "npm run build --workspace=@indigram/worker",
-    "predev:all": "npm run db:generate && npm run db:migrate && npm run build --workspace=@indigram/database && docker compose up -d postgres redis minio",
-    "dev:all": "concurrently --kill-others --names api,web,worker --prefix-colors blue,magenta,green \"npm run dev --workspace=@indigram/api\" \"npm run dev --workspace=@indigram/web\" \"npm run dev --workspace=@indigram/worker\""
+    "dev:down": "docker compose down",
+    "predev:all": "npm run db:generate && npm run build --workspace=@indigram/database",
+    "dev:all": "npm run dev:down && npm run predev:all && docker compose up -d postgres redis minio && npm run db:migrate && docker compose up -d --build api && concurrently --kill-others --names web,worker --prefix-colors magenta,green \"npm run dev --workspace=@indigram/web\" \"npm run dev --workspace=@indigram/worker\""
   },
   "engines": {
     "node": ">=22.0.0",

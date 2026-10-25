@@ -28,13 +28,13 @@ export const postService = {
   },
 
   async get(authorId: string, postId: string) {
-    const post = await postRepository.findById(postId);
+    const post = await postRepository.findById(postId, authorId);
     if (!post || post.authorId !== authorId) throw new AppError(404, "Post not found", "POST_NOT_FOUND");
     return withMediaUrls(post);
   },
 
   async list(authorId: string, page: number, limit: number) {
-    const posts = await postRepository.listOwned(authorId, (page - 1) * limit, limit);
+    const posts = await postRepository.listOwned(authorId, authorId, (page - 1) * limit, limit);
     const hasMore = posts.length > limit;
     return {
       posts: await Promise.all(posts.slice(0, limit).map(withMediaUrls)),
@@ -45,9 +45,14 @@ export const postService = {
   }
 };
 
-async function withMediaUrls<T extends { variants: Array<{ objectKey: string; kind: string }>; assets: Array<{ variants: Array<{ objectKey: string; kind: string }> }> }>(post: T) {
+async function withMediaUrls<T extends { variants: Array<{ objectKey: string; kind: string }>; assets: Array<{ variants: Array<{ objectKey: string; kind: string }> }>; _count: { likes: number; comments: number }; likes: Array<unknown> }>(post: T) {
   return {
     ...post,
+    likesCount: post._count.likes,
+    commentsCount: post._count.comments,
+    likedByMe: post.likes.length > 0,
+    _count: undefined,
+    likes: undefined,
     variants: await Promise.all(post.variants.map(async (variant) => ({
       ...variant,
       url: await downloadUrl(variant.objectKey)

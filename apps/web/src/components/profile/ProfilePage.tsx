@@ -5,12 +5,14 @@ import { PostCard } from "./PostCard";
 
 export function ProfilePage({
   user,
+  token,
   posts,
   loading,
   error,
   onRefresh,
 }: {
   user: User;
+  token: string;
   posts: Post[];
   loading: boolean;
   error: string;
@@ -67,7 +69,7 @@ export function ProfilePage({
       ) : posts.length ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {posts.map((post) => (
-            <PostCard key={post.id} post={post} />
+            <PostCard key={post.id} post={post} user={user} token={token} />
           ))}
         </div>
       ) : (

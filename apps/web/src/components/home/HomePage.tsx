@@ -1,17 +1,18 @@
-import { useState } from "react";
-import type { Post } from "../../types/api";
+import type { Post, User } from "../../types/api";
 import { PostCard } from "../profile/PostCard";
 import { PostComposer } from "./PostComposer";
 import { SuggestedUsers } from "./SuggestedUsers";
 
 export function HomePage({
   token,
+  user,
   posts,
   onPostsChanged,
   composerOpen,
   onComposerChange,
 }: {
   token: string;
+  user: User;
   posts: Post[];
   onPostsChanged: () => Promise<void>;
   composerOpen: boolean;
@@ -27,7 +28,7 @@ export function HomePage({
           {posts.length ? (
             <div className="flex flex-col gap-4">
               {posts.map((post) => (
-                <PostCard key={post.id} post={post} />
+                <PostCard key={post.id} post={post} user={user} token={token} />
               ))}
             </div>
           ) : (

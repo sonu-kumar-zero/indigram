@@ -20,15 +20,22 @@ npm run dev
 # In another terminal, with ffmpeg installed:
 npm run dev --workspace=@indigram/worker
 ```
-The API listens on `http://localhost:4000`; health check: `GET /health`, API base: `/api/v1`.
+The API listens on `http://localhost:4000`; health check: `GET /health`, metrics: `GET /metrics`, API base: `/api/v1`.
 
-To start the API, web app, media worker, and local Redis/MinIO dependencies together:
+The `/metrics` endpoint exposes application metrics, including request totals, request duration histograms, in-flight requests, and Node.js runtime metrics. The authenticated web app includes a live **Monitoring** page with metric cards, sparklines, and the complete metric inventory.
+
+To start the API, web app, media worker, monitoring stack, and local dependencies together:
 
 ```bash
 npm run dev:all
 ```
 
-The web app listens on `http://localhost:5173`.
+The API listens on `http://localhost:4000` and the web app listens on `http://localhost:5173`. Open **Monitoring** from the sidebar to view the live dashboard.
+Stop the local Docker dependencies when finished with:
+
+```bash
+npm run dev:down
+```
 
 ## Workspace layout
 - `apps/api`: HTTP server, auth routes/controllers/services, middleware.
@@ -52,6 +59,18 @@ The web app listens on `http://localhost:5173`.
 - `GET /api/v1/auth/sessions` (authenticated)
 - `DELETE /api/v1/auth/sessions/:sessionId` (authenticated)
 - `GET /api/v1/auth/availability/username?username=...`
+
+## Post engagement endpoints
+- `POST /api/v1/posts/:postId/like`
+- `DELETE /api/v1/posts/:postId/like`
+- `GET /api/v1/posts/:postId/comments?page=1&limit=20`
+- `POST /api/v1/posts/:postId/comments` with `{ "content": "..." }`
+- `POST /api/v1/posts/:postId/comments` with `{ "content": "...", "parentId": "..." }` to reply to a comment
+- `POST /api/v1/comments/:commentId/like`
+- `DELETE /api/v1/comments/:commentId/like`
+- `DELETE /api/v1/comments/:commentId`
+
+Post and comment likes are idempotent. Comment deletion is available to the comment author and the post author; deleting a parent comment also deletes its replies.
 
 ## Security notes
 - Access tokens are short-lived JWTs. Refresh tokens are random opaque values stored only as SHA-256 hashes in the database and rotated on refresh.

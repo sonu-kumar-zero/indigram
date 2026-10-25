@@ -39,16 +39,47 @@ services:
     volumes:
       - indigram_miniodata:/data
 
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: indigram-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://indigram:indigram_dev_password@postgres:5432/indigram?schema=public
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: http://minio:9000
+      S3_PUBLIC_ENDPOINT: http://localhost:9000
+      APP_BASE_URL: http://localhost:4000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio:
+        condition: service_started
+    ports:
+      - "4000:4000"
+
   media-worker:
     build:
       context: .
       dockerfile: apps/worker/Dockerfile
     env_file:
       - .env
+    environment:
+      DATABASE_URL: postgresql://indigram:indigram_dev_password@postgres:5432/indigram?schema=public
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: http://minio:9000
     depends_on:
-      - postgres
-      - redis
-      - minio
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio:
+        condition: service_started
     deploy:
       replicas: 2
 volumes:

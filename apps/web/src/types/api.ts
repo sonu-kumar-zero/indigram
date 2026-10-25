@@ -24,6 +24,20 @@ export type Post = {
   failureReason: string | null;
   variants: PostVariant[];
   assets?: Array<{ position: number; variants: PostVariant[] }>;
+  likesCount: number;
+  commentsCount: number;
+  likedByMe: boolean;
+};
+
+export type Comment = {
+  id: string;
+  content: string;
+  createdAt: string;
+  author: User;
+  likesCount: number;
+  repliesCount: number;
+  likedByMe: boolean;
+  replies: Comment[];
 };
 
 export type CreatePostInput = {

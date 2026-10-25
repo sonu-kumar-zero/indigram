@@ -40,6 +40,14 @@ function UserIcon() {
   );
 }
 
+function ActivityIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M3 12h4l2.5-7 5 14 2.5-7H21" />
+    </svg>
+  );
+}
+
 function PlusIcon() {
   return (
     <svg
@@ -84,6 +92,7 @@ export function Sidebar({
   const items = [
     { label: "Home", value: "home" as const, icon: <HomeIcon /> },
     { label: "Profile", value: "profile" as const, icon: <UserIcon /> },
+    { label: "Monitoring", value: "monitoring" as const, icon: <ActivityIcon /> },
   ];
 
   return (

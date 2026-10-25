@@ -3,9 +3,10 @@ import type { Post, User } from "../../types/api";
 import { postsApi } from "../../api";
 import { HomePage } from "../home/HomePage";
 import { ProfilePage } from "../profile/ProfilePage";
+import { MonitoringPage } from "../monitoring/MonitoringPage";
 import { Sidebar } from "./Sidebar";
 
-export type View = "home" | "profile";
+export type View = "home" | "profile" | "monitoring";
 
 export function AppShell({
   token,
@@ -55,19 +56,23 @@ export function AppShell({
         {view === "home" ? (
           <HomePage
             token={token}
+            user={user}
             posts={posts}
             onPostsChanged={loadPosts}
             composerOpen={composerOpen}
             onComposerChange={setComposerOpen}
           />
-        ) : (
+        ) : view === "profile" ? (
           <ProfilePage
             user={user}
+            token={token}
             posts={posts}
             loading={loadingPosts}
             error={postsError}
             onRefresh={loadPosts}
           />
+        ) : (
+          <MonitoringPage />
         )}
       </div>
     </main>

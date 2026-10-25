@@ -10,16 +10,16 @@ export const postRepository = {
   markProcessing(postId: string, authorId: string) {
     return prisma.post.updateMany({ where: { id: postId, authorId, status: "AWAITING_UPLOAD" }, data: { status: "PROCESSING" } });
   },
-  findById(postId: string) {
-    return prisma.post.findUnique({ where: { id: postId }, include: { variants: true, assets: { include: { variants: true }, orderBy: { position: "asc" } } } });
+  findById(postId: string, userId: string) {
+    return prisma.post.findUnique({ where: { id: postId }, include: { variants: true, assets: { include: { variants: true }, orderBy: { position: "asc" } }, _count: { select: { likes: true, comments: true } }, likes: { where: { userId }, select: { userId: true } } } });
   },
-  listOwned(authorId: string, skip: number, take: number) {
+  listOwned(authorId: string, userId: string, skip: number, take: number) {
     return prisma.post.findMany({
       where: { authorId },
       orderBy: { createdAt: "desc" },
       skip,
       take: take + 1,
-      include: { variants: true, assets: { include: { variants: true }, orderBy: { position: "asc" } } }
+      include: { variants: true, assets: { include: { variants: true }, orderBy: { position: "asc" } }, _count: { select: { likes: true, comments: true } }, likes: { where: { userId }, select: { userId: true } } }
     });
   }
 };
